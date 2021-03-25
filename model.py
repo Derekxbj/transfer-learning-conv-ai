@@ -53,18 +53,14 @@ class MyModel(nn.Module):
                 input_ids, token_type_ids=token_type_ids, mc_token_ids=mc_token_ids,
             )
 
-            # h0 = self.init_hidden(len(emotion_labels))
             
             hidden_states = hidden_states[-1]
-            # print("hidden_states: ", hidden_states.size())
             x = hidden_states[:,-1,-1,:]
             x = x.reshape(-1, self.input_dims)
             out = self.fc1(x)
             out = self.fc2(out)
-            # out, h = self.rnn(x, h0)
-            # out = out[:,-1,:]
+                                   
             out_e = self.softmax(self.fc3(out))
-            # _, emotion_preds = torch.max(out_e, 1)
             
             out_a = self.tanh_a(self.fc4(out))
             out_v = self.tanh_v(self.fc5(out))
