@@ -25,21 +25,49 @@ class MyModel(nn.Module):
         self.config = self.model.config
 
     
-    def forward(self, input_ids, mc_token_ids, lm_labels, mc_labels, token_type_ids, mode):
+    def forward(self, input_ids, mc_token_ids, lm_labels, mc_labels, token_type_ids, 
+                emotion_labels, arousal_labels, valence_labels, mode):
         if mode == "train":
-            (lm_loss), (mc_loss), *_ = self.model(
+            loss, mc_loss, logits, mc_logits, hidden_states, *_ = self.model(
                 input_ids, token_type_ids=token_type_ids, mc_token_ids=mc_token_ids,
                 mc_labels=mc_labels, lm_labels=lm_labels
             )
+            
+            hidden_states = hidden_states[-1]
+            x = hidden_states[:,-1,-1,:] # (batch, num_candidates, seq_len, hidden_size)
+            x = x.reshape(-1, self.input_dims)
+            out = self.fc1(x)
+            out = self.fc2(out)
+            out_e = self.softmax(self.fc3(out))
+            out_a = self.tanh_a(self.fc4(out))
+            out_v = self.tanh_v(self.fc5(out))
+            
+            loss_e = self.loss(out_e, emotion_labels)
+            loss_a = self.loss_mse(out_a, arousal_labels)
+            loss_v = self.loss_mse(out_v, valence_labels
+            
+            return loss, mc_loss, loss_e, loss_a, loss_v
 
-            return lm_loss, mc_loss
-        
         if mode=="eval":
-            lm_logits, mc_logits, *_ = self.model(
+            lm_logits, mc_logits, hidden_states, *_ = self.model(
                 input_ids, token_type_ids=token_type_ids, mc_token_ids=mc_token_ids,
             )
+
+            # h0 = self.init_hidden(len(emotion_labels))
             
-            print('lm_logits is ', lm_logits)
-            print('mc_logits is ', mc_logits)
+            hidden_states = hidden_states[-1]
+            # print("hidden_states: ", hidden_states.size())
+            x = hidden_states[:,-1,-1,:]
+            x = x.reshape(-1, self.input_dims)
+            out = self.fc1(x)
+            out = self.fc2(out)
+            # out, h = self.rnn(x, h0)
+            # out = out[:,-1,:]
+            out_e = self.softmax(self.fc3(out))
+            # _, emotion_preds = torch.max(out_e, 1)
             
-            return lm_logits, mc_logits
+            out_a = self.tanh_a(self.fc4(out))
+            out_v = self.tanh_v(self.fc5(out))
+            
+            return lm_logits, mc_logits, out_e, out_a, out_v
+        
