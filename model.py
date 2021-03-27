@@ -66,4 +66,31 @@ class MyModel(nn.Module):
             out_v = self.tanh_v(self.fc5(out))
             
             return lm_logits, mc_logits, out_e, out_a, out_v
+      
+    def generate(self, input_ids, token_type_ids, max_length, min_length=1, temperature=0.7):
+        self.model.eval()
         
+#         greedy_output = self.model.generate(input_ids, max_length)
+        special_tokens_ids = self.tokenizer.convert_tokens_to_ids(SPECIAL_TOKENS)
+        current_output = []
+        
+        for i in range(max_length):
+            logits,mc_logits, *_ = self.model(input_ids, token_type_ids=token_type_ids) 
+            logits = logits[0, -1, :] / temperature
+            logits = top_filtering(logits)
+            probs = F.softmax(logits, dim=-1)
+
+            prev = torch.topk(probs, 1)[1] if True else torch.multinomial(probs, 1)
+            if i < min_length and prev.item() in special_tokens_ids:
+                while prev.item() in special_tokens_ids:
+                    if probs.max().item() == 1:
+                        warnings.warn("Warning: model generating special token with probability 1.")
+                        break  # avoid infinitely looping over special token
+                    prev = torch.multinomial(probs, num_samples=1)
+
+            if prev.item() in special_tokens_ids:
+                break
+            current_output.append(prev.item())
+        
+        
+        return current_output
